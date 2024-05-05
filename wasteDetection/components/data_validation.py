@@ -1,46 +1,52 @@
-import sys, os
+import os,sys
+import shutil
 from wasteDetection.logger import logging
 from wasteDetection.exception import AppException
-from wasteDetection.components.data_ingestion import DataIngestion
-from wasteDetection.components.data_validation import DataValidation
-
-
-
-from wasteDetection.entity.config_entity import (DataIngestionConfig,
-                                                 DataValidationConfig,
-                                                 )
-
+from wasteDetection.entity.config_entity import DataValidationConfig
 from wasteDetection.entity.artifacts_entity import (DataIngestionArtifact,
-                                                    DataValidationArtifact,
-                                                    )
+                                                 DataValidationArtifact)
 
 
-class TrainPipeline:
-    def __init__(self):
-        self.data_ingestion_config = DataIngestionConfig()
-        self.data_validation_config = DataValidationConfig()
-      
+
+
+
+
+class DataValidation:
+    def __init__(
+        self,
+        data_ingestion_artifact: DataIngestionArtifact,
+        data_validation_config: DataValidationConfig,
+    ):
+        try:
+            self.data_ingestion_artifact = data_ingestion_artifact
+            self.data_validation_config = data_validation_config
+
+        except Exception as e:
+            raise AppException(e, sys) 
+        
 
 
     
-    def start_data_ingestion(self)-> DataIngestionArtifact:
-        try: 
-            logging.info(
-                "Entered the start_data_ingestion method of TrainPipeline class"
-            )
-            logging.info("Getting the data from URL")
+    def validate_all_files_exist(self)-> bool:
+        try:
+            validation_status = None
 
-            data_ingestion = DataIngestion(
-                data_ingestion_config =  self.data_ingestion_config
-            )
+            all_files = os.listdir(self.data_ingestion_artifact.feature_store_path)
 
-            data_ingestion_artifact = data_ingestion.initiate_data_ingestion()
-            logging.info("Got the data from URL")
-            logging.info(
-                "Exited the start_data_ingestion method of TrainPipeline class"
-            )
+            for file in all_files:
+                if file not in self.data_validation_config.required_file_list:
+                    validation_status = False
+                    os.makedirs(self.data_validation_config.data_validation_dir, exist_ok=True)
+                    with open(self.data_validation_config.valid_status_file_dir, 'w') as f:
+                        f.write(f"Validation status: {validation_status}")
+                else:
+                    validation_status = True
+                    os.makedirs(self.data_validation_config.data_validation_dir, exist_ok=True)
+                    with open(self.data_validation_config.valid_status_file_dir, 'w') as f:
+                        f.write(f"Validation status: {validation_status}")
 
-            return data_ingestion_artifact
+            return validation_status
+
 
         except Exception as e:
             raise AppException(e, sys)
@@ -48,50 +54,21 @@ class TrainPipeline:
 
 
     
-    def start_data_validation(
-        self, data_ingestion_artifact: DataIngestionArtifact
-    ) -> DataValidationArtifact:
-        logging.info("Entered the start_data_validation method of TrainPipeline class")
-
+    def initiate_data_validation(self) -> DataValidationArtifact: 
+        logging.info("Entered initiate_data_validation method of DataValidation class")
         try:
-            data_validation = DataValidation(
-                data_ingestion_artifact=data_ingestion_artifact,
-                data_validation_config=self.data_validation_config,
-            )
+            status = self.validate_all_files_exist()
+            data_validation_artifact = DataValidationArtifact(
+                validation_status=status)
 
-            data_validation_artifact = data_validation.initiate_data_validation()
+            logging.info("Exited initiate_data_validation method of DataValidation class")
+            logging.info(f"Data validation artifact: {data_validation_artifact}")
 
-            logging.info("Performed the data validation operation")
-
-            logging.info(
-                "Exited the start_data_validation method of TrainPipeline class"
-            )
+            if status:
+                shutil.copy(self.data_ingestion_artifact.data_zip_file_path, os.getcwd())
 
             return data_validation_artifact
 
         except Exception as e:
-            raise AppException(e, sys) from e
-
-
-
-   
-        
-
-    
-
-    def run_pipeline(self) -> None:
-        try:
-            data_ingestion_artifact = self.start_data_ingestion()
-            data_validation_artifact = self.start_data_validation(
-                data_ingestion_artifact=data_ingestion_artifact
-            )
-
-            if data_validation_artifact.validation_status == True:
-                model_trainer_artifact = self.start_model_trainer()
-            
-            else:
-                raise Exception("Your data is not in correct format")
-
-        
-        except Exception as e:
             raise AppException(e, sys)
+        

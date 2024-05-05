@@ -1,4 +1,5 @@
 import sys,os
+from pathlib import Path
 from wasteDetection.pipeline.training_pipeline import TrainPipeline
 from wasteDetection.utils.main_utils import decodeImage, encodeImageIntoBase64
 from flask import Flask, request, jsonify, render_template,Response
@@ -34,10 +35,12 @@ def predictRoute():
     try:
         image = request.json['image']
         decodeImage(image, clApp.filename)
+     
 
         os.system("cd yolov5/ && python detect.py --weights best.pt --img 416 --conf 0.5 --source ../data/inputImage.jpg")
 
-        opencodedbase64 = encodeImageIntoBase64("yolov5/runs/detect/exp/inputImage.jpg")
+        image_path = Path("yolov5/runs/detect/exp/inputImage.jpg")
+        opencodedbase64 = encodeImageIntoBase64(image_path)    
         result = {"image": opencodedbase64.decode('utf-8')}
         os.system("rm -rf yolov5/runs")
 
